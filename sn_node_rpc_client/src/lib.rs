@@ -66,7 +66,10 @@ impl RpcActions for RpcClient {
         let mut client = SafeNodeClient::connect(self.endpoint.clone()).await?;
         let response = client.node_info(Request::new(NodeInfoRequest {})).await?;
         let node_info_resp = response.get_ref();
-        let peer_id = PeerId::from_bytes(&node_info_resp.peer_id)?;
+        let peer_id = match PeerId::from_bytes(&node_info_resp.peer_id) {
+            Ok(peer_id) => peer_id,
+            Err(err) => panic!("Failed to parse peer_id with error {err:?}"),
+        };
         let node_info = NodeInfo {
             pid: node_info_resp.pid,
             peer_id,
@@ -86,7 +89,10 @@ impl RpcActions for RpcClient {
 
         let mut connected_peers = Vec::new();
         for bytes in network_info.connected_peers.iter() {
-            let peer_id = PeerId::from_bytes(bytes)?;
+            let peer_id = match PeerId::from_bytes(bytes) {
+                Ok(peer_id) => peer_id,
+                Err(err) => panic!("Failed to parse peer_id with error {err:?}"),
+            };
             connected_peers.push(peer_id);
         }
 
