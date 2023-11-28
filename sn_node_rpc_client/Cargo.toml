@@ -21,8 +21,8 @@ bls = { package = "blsttc", version = "8.0.1" }
 clap = { version = "4.2.1", features = ["derive"] }
 color-eyre = "0.6.2"
 hex = "~0.4.3"
-libp2p = { version="0.52", features = ["kad"]}
-libp2p-identity = { version="0.2.7", features = ["rand"] }
+libp2p = { git = "https://github.com/maqi/rust-libp2p", branch = "two_fixes_combined", features = ["kad"]}
+libp2p-identity = { git = "https://github.com/maqi/rust-libp2p", branch = "two_fixes_combined", features = ["rand"] }
 sn_client = { path = "../sn_client", version = "0.98.18" }
 sn_logging = { path = "../sn_logging", version = "0.2.15" }
 sn_node = { path = "../sn_node", version = "0.98.36" }
