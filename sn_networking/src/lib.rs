@@ -56,13 +56,21 @@ use sn_transfers::{MainPubkey, NanoTokens, PaymentQuote};
 use std::{
     collections::{BTreeMap, HashMap},
     path::PathBuf,
-    time::Duration,
 };
 use tokio::sync::{
     mpsc::{self, Sender},
     oneshot,
 };
-
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::task::spawn;
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::time::sleep;
+use tokio::time::Duration;
+use tracing::trace;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_futures::spawn_local as spawn;
+#[cfg(target_arch = "wasm32")]
+use wasmtimer::tokio::sleep;
 /// The type of quote for a selected payee.
 pub type PayeeQuote = (PeerId, MainPubkey, PaymentQuote);
 
@@ -173,9 +181,14 @@ impl Network {
     /// Dial the given peer at the given address.
     /// This function will only be called for the bootstrap nodes.
     pub async fn dial(&self, addr: Multiaddr) -> Result<()> {
+        info!("dddddddddddddddialling");
         let (sender, receiver) = oneshot::channel();
         self.send_swarm_cmd(SwarmCmd::Dial { addr, sender })?;
-        receiver.await?
+        info!("dddddddddddddddialling await");
+        let x = receiver.await?;
+        info!("dddddddddddddddialling awaited");
+
+        x
     }
 
     /// Returns the closest peers to the given `XorName`, sorted by their distance to the xor_name.
@@ -333,7 +346,7 @@ impl Network {
             } else {
                 MIN_WAIT_BEFORE_READING_A_PUT + MIN_WAIT_BEFORE_READING_A_PUT
             };
-            tokio::time::sleep(waiting_time).await;
+            sleep(waiting_time).await;
         }
 
         Err(Error::FailedToVerifyChunkProof(chunk_address.clone()))
@@ -415,10 +428,36 @@ impl Network {
         Ok(())
     }
 
+    /// Get a record from the network
+    /// This differs from non-wasm32 builds as no retries are applied
+    #[cfg(target_arch = "wasm32")]
+    pub async fn get_record_from_network(
+        &self,
+        key: RecordKey,
+        cfg: &GetRecordCfg,
+    ) -> Result<Record> {
+        let pretty_key = PrettyPrintRecordKey::from(&key);
+        info!("Getting record from network of {pretty_key:?}. with cfg {cfg:?}",);
+        let (sender, receiver) = oneshot::channel();
+        self.send_swarm_cmd(SwarmCmd::GetNetworkRecord {
+            key: key.clone(),
+            sender,
+            cfg: cfg.clone(),
+        })?;
+        let result = receiver.await.map_err(|e| {
+            error!("When fetching record {pretty_key:?}, encountered a channel error {e:?}");
+            Error::InternalMsgChannelDropped
+        })?;
+
+        result.map_err(Error::from)
+    }
+
     /// Get the Record from the network
     /// Carry out re-attempts if required
     /// In case a target_record is provided, only return when fetched target.
     /// Otherwise count it as a failure when all attempts completed.
+    ///
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn get_record_from_network(
         &self,
         key: RecordKey,
@@ -581,7 +620,7 @@ impl Network {
                 .gen_range(MIN_WAIT_BEFORE_READING_A_PUT..MAX_WAIT_BEFORE_READING_A_PUT);
             // Small wait before we attempt to verify.
             // There will be `re-attempts` to be carried out within the later step anyway.
-            tokio::time::sleep(wait_duration).await;
+            sleep(wait_duration).await;
             debug!("Attempting to verify {pretty_key:?} after we've slept for {wait_duration:?}");
 
             // Verify the record is stored, requiring re-attempts
@@ -869,7 +908,7 @@ pub(crate) fn send_swarm_cmd(swarm_cmd_sender: Sender<SwarmCmd>, cmd: SwarmCmd) 
     }
 
     // Spawn a task to send the SwarmCmd and keep this fn sync
-    let _handle = tokio::spawn(async move {
+    let _handle = spawn(async move {
         if let Err(error) = swarm_cmd_sender.send(cmd).await {
             error!("Failed to send SwarmCmd: {}", error);
         }

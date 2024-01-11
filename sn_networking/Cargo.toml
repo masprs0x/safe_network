@@ -24,7 +24,7 @@ futures = "~0.3.13"
 hyper = { version = "0.14", features = ["server", "tcp", "http1"], optional = true}
 itertools = "~0.11.0"
 custom_debug = "~0.5.0"
-libp2p = { version="0.53", features = ["tokio", "dns", "kad", "macros", "request-response", "cbor","identify", "autonat", "noise", "tcp", "yamux", "gossipsub"] }
+libp2p = { version="0.53", features = ["tokio", "dns", "kad", "macros", "request-response", "cbor","identify", "autonat", "noise", "tcp", "yamux", "gossipsub",  "websocket"] }
 prometheus-client = { version = "0.22", optional = true }
 rand = { version = "~0.8.5", features = ["small_rng"] }
 rayon = "1.8.0"
@@ -35,10 +35,11 @@ sn_transfers = { path = "../sn_transfers", version = "0.14.40" }
 sysinfo = { version = "0.29.0", default-features = false, optional = true }
 thiserror = "1.0.23"
 tiny-keccak = { version = "~2.0.2", features = [ "sha3" ] }
-tokio = { version = "1.32.0", features = ["io-util", "macros", "parking_lot", "rt", "sync", "time"] }
+tokio = { version = "1.32.0", features = ["io-util", "macros", "rt", "sync", "time"] }
 tracing = { version = "~0.1.26" }
 xor_name = "5.0.0"
 backoff = { version = "0.4.0", features = ["tokio"] }
+instant = "0.1.12" # Allows for cross platform instant and wasm time handling
 
 [dev-dependencies]
 bls = { package = "blsttc", version = "8.0.1" }
@@ -52,7 +53,13 @@ workspace = true
 
 
 
+
+# wasm build requirements
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.12", features = ["js"] }
-libp2p = { version="0.53", features = ["tokio", "dns", "kad", "macros", "request-response", "cbor","identify", "autonat", "noise", "tcp", "yamux", "gossipsub", "webtransport-websys"] }
-
+libp2p = { version="0.53", features = ["tokio", "dns", "kad", "tcp", "macros", "request-response", "cbor","identify", "autonat", "noise", "yamux", "gossipsub", "websocket-websys", "wasm-bindgen"] }
+wasmtimer = "0.2.0"
+wasm-bindgen-futures = "0.4.40"

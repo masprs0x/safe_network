@@ -26,17 +26,24 @@ use crate::{
     Network, CLOSE_GROUP_SIZE,
 };
 use futures::StreamExt;
-#[cfg(not(feature = "tcp"))]
-use libp2p::core::muxing::StreamMuxerBox;
+// #[cfg(not(feature = "tcp"))]
+// use libp2p::core::muxing::StreamMuxerBox;
 #[cfg(feature = "local-discovery")]
 use libp2p::mdns;
 // default transports
-#[cfg(all(not(feature = "tcp"), not(target_arch = "wasm32")))]
-use libp2p::quic::{tokio::Transport as TokioTransport, Config as TransportConfig};
-#[cfg(feature = "tcp")]
+// #[cfg(all(not(feature = "tcp"), not(target_arch = "wasm32")))]
+// use libp2p::quic::{tokio::Transport as TokioTransport, Config as TransportConfig};
+
+#[cfg(not(target_arch = "wasm32"))]
+use libp2p::websocket::WsConfig;
+
+// #[cfg(target_arch = "wasm32")]
+// use libp2p::websocket_websys::WsConfig;
+// #[cfg(feature = "tcp")]
+#[cfg(not(target_arch = "wasm32"))]
 use libp2p::tcp::{tokio::Transport as TokioTransport, Config as TransportConfig};
 #[cfg(target_arch = "wasm32")]
-use libp2p::webtransport_websys::{Config as TransportConfig, Transport as TokioTransport};
+use libp2p::websocket_websys::Transport as WebSocketTransport;
 use libp2p::{
     autonat,
     identity::Keypair,
@@ -62,11 +69,23 @@ use std::{
     net::SocketAddr,
     num::NonZeroUsize,
     path::PathBuf,
-    time::{Duration, Instant},
 };
 use tiny_keccak::{Hasher, Sha3};
 use tokio::sync::{mpsc, oneshot};
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::time::interval;
+use tokio::time::Duration;
+#[cfg(target_arch = "wasm32")]
+use wasmtimer::tokio::interval;
+
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::task::spawn;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_futures::spawn_local as spawn;
+
 use tracing::warn;
+
+use instant::Instant;
 
 /// The ways in which the Get Closest queries are used.
 pub(crate) enum PendingGetClosestType {
@@ -327,19 +346,24 @@ impl NetworkBuilder {
         // Flesh out the multiaddress
         let listen_addr = Multiaddr::from(listen_socket_addr.ip());
 
-        #[cfg(feature = "quic")]
-        let listen_addr = listen_addr
-            .with(Protocol::Udp(listen_socket_addr.port()))
-            .with(Protocol::QuicV1);
+        // #[cfg(feature = "quic")]
+        // let listen_addr = listen_addr
+        //     .with(Protocol::Udp(listen_socket_addr.port()))
+        //     .with(Protocol::QuicV1);
 
-        #[cfg(target_arch = "wasm32")]
         let listen_addr = listen_addr
-            .with(Protocol::Udp(listen_socket_addr.port()))
-            .with(Protocol::WebTransport);
+            .with(Protocol::Tcp(listen_socket_addr.port()))
+            .with(Protocol::Ws("/".into()));
+
+        // #[cfg(target_arch = "wasm32")] // actually should be the same now...
+        // let listen_addr = listen_addr
+        //     .with(Protocol::Udp(listen_socket_addr.port()))
+        //     .with(Protocol::Ws("/".into()));
 
         #[cfg(feature = "tcp")]
         Multiaddr::from(listen_socket_addr.ip()).with(Protocol::Tcp(listen_socket_addr.port()));
 
+        info!("Attemoting to listen on: {listen_addr:?}");
         let _listener_id = swarm_driver
             .swarm
             .listen_on(listen_addr)
@@ -350,6 +374,7 @@ impl NetworkBuilder {
 
     /// Same as `build_node` API but creates the network components in client mode
     pub fn build_client(self) -> Result<(Network, mpsc::Receiver<NetworkEvent>, SwarmDriver)> {
+        debug!("Building client");
         // Create a Kademlia behaviour for client mode, i.e. set req/resp protocol
         // to outbound-only mode and don't listen on any address
         let mut kad_cfg = kad::Config::default(); // default query timeout is 60 secs
@@ -363,6 +388,8 @@ impl NetworkBuilder {
             .set_replication_factor(
                 NonZeroUsize::new(CLOSE_GROUP_SIZE).ok_or_else(|| Error::InvalidCloseGroupSize)?,
             );
+
+        debug!("Building client 2");
 
         let (network, net_event_recv, driver) = self.build(
             kad_cfg,
@@ -386,7 +413,11 @@ impl NetworkBuilder {
     ) -> Result<(Network, mpsc::Receiver<NetworkEvent>, SwarmDriver)> {
         let peer_id = PeerId::from(self.keypair.public());
         // vdash metric (if modified please notify at https://github.com/happybeing/vdash/issues):
-        info!("Node (PID: {}) with PeerId: {peer_id}", std::process::id());
+        #[cfg(not(target_arch = "wasm32"))]
+        info!(
+            "Process (PID: {}) with PeerId: {peer_id}",
+            std::process::id()
+        );
         info!(
             "Self PeerID {peer_id} is represented as kbucket_key {:?}",
             PrettyPrintKBucketKey(NetworkAddress::from_peer(peer_id).as_kbucket_key())
@@ -465,13 +496,29 @@ impl NetworkBuilder {
             libp2p::identify::Behaviour::new(cfg)
         };
 
-        #[cfg(not(feature = "tcp"))]
-        let main_transport = TokioTransport::new(TransportConfig::new(&self.keypair))
-            .map(|(peer_id, muxer), _| (peer_id, StreamMuxerBox::new(muxer)))
+        // TODO: for now we jsut run websockets to see if we can go
+        // // if we're not tcp etc we can also run this one.
+        // #[cfg(all(not(feature = "tcp"), not(target_arch="wasm32")))]
+        // let main_transport = TokioTransport::new(TransportConfig::new(&self.keypair))
+        //     .map(|(peer_id, muxer), _| (peer_id, StreamMuxerBox::new(muxer)))
+        //     .boxed();
+
+        #[cfg(target_arch = "wasm32")]
+        let main_transport = WebSocketTransport::default()
+            .upgrade(libp2p::core::upgrade::Version::V1)
+            .authenticate(
+                libp2p::noise::Config::new(&self.keypair)
+                    .expect("Signing libp2p-noise static DH keypair failed."),
+            )
+            .multiplex(libp2p::yamux::Config::default())
             .boxed();
 
-        #[cfg(feature = "tcp")]
-        let main_transport = TokioTransport::new(TransportConfig::default())
+        // #[cfg(feature = "tcp")]
+        #[cfg(not(target_arch = "wasm32"))]
+        let tcp = TokioTransport::new(TransportConfig::default());
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let main_transport = WsConfig::new(tcp)
             .upgrade(libp2p::core::upgrade::Version::V1)
             .authenticate(
                 libp2p::noise::Config::new(&self.keypair)
@@ -553,10 +600,24 @@ impl NetworkBuilder {
             autonat,
             gossipsub,
         };
+
+        debug!("cccccccc");
+        #[cfg(not(target_arch = "wasm32"))]
         let swarm_config = libp2p::swarm::Config::with_tokio_executor()
             .with_idle_connection_timeout(CONNECTION_KEEP_ALIVE_TIMEOUT);
+        #[cfg(target_arch = "wasm32")]
+        let swarm_config = libp2p::swarm::Config::with_wasm_executor()
+            .with_idle_connection_timeout(CONNECTION_KEEP_ALIVE_TIMEOUT);
 
+        debug!("cccccccccccccccc2222221112cc");
         let swarm = Swarm::new(transport, behaviour, peer_id, swarm_config);
+
+        debug!("cccccccccccccccc22222222222cc");
+
+        let bootstrap = ContinuousBootstrap::new();
+        debug!("continue");
+        let replication_fetcher = ReplicationFetcher::new(peer_id);
+        debug!("repl");
 
         let swarm_driver = SwarmDriver {
             swarm,
@@ -564,9 +625,9 @@ impl NetworkBuilder {
             local: self.local,
             is_client,
             connected_peers: 0,
-            bootstrap: ContinuousBootstrap::new(),
+            bootstrap,
             close_group: Default::default(),
-            replication_fetcher: ReplicationFetcher::new(peer_id),
+            replication_fetcher,
             #[cfg(feature = "open-metrics")]
             network_metrics,
             cmd_receiver: swarm_cmd_receiver,
@@ -584,6 +645,8 @@ impl NetworkBuilder {
             handling_statistics: Default::default(),
             handled_times: 0,
         };
+
+        debug!("swarm driver up");
 
         Ok((
             Network {
@@ -646,7 +709,7 @@ impl SwarmDriver {
     /// and command receiver messages, ensuring efficient handling of multiple
     /// asynchronous tasks.
     pub async fn run(mut self) {
-        let mut bootstrap_interval = tokio::time::interval(BOOTSTRAP_INTERVAL);
+        let mut bootstrap_interval = interval(BOOTSTRAP_INTERVAL);
         loop {
             tokio::select! {
                 swarm_event = self.swarm.select_next_some() => {
@@ -658,7 +721,7 @@ impl SwarmDriver {
                 },
                 some_cmd = self.cmd_receiver.recv() => match some_cmd {
                     Some(cmd) => {
-                        let start = std::time::Instant::now();
+                        let start = Instant::now();
                         let cmd_string = format!("{cmd:?}");
                         if let Err(err) = self.handle_cmd(cmd) {
                             warn!("Error while handling cmd: {err}");
@@ -688,7 +751,7 @@ impl SwarmDriver {
         let capacity = event_sender.capacity();
 
         // push the event off thread so as to be non-blocking
-        let _handle = tokio::spawn(async move {
+        let _handle = spawn(async move {
             if capacity == 0 {
                 warn!(
                     "NetworkEvent channel is full. Await capacity to send: {:?}",
@@ -749,6 +812,8 @@ impl SwarmDriver {
                 .build(),
             None => DialOpts::unknown_peer_id().address(addr).build(),
         };
+
+        debug!("-------------------------------there");
 
         self.swarm.dial(opts)
     }

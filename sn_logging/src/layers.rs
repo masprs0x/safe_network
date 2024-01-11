@@ -252,6 +252,11 @@ fn get_logging_targets(logging_env_value: &str) -> Result<Vec<(String, Level)>> 
             ("sn_registers".to_string(), Level::INFO),
             ("sn_testnet".to_string(), Level::TRACE),
             ("sn_transfers".to_string(), Level::TRACE),
+            // ("libp2p".to_string(), Level::TRACE),
+            // ("libp2p_swarm".to_string(), Level::TRACE),
+            // ("libp2p_tcp".to_string(), Level::TRACE),
+            // ("libp2p_websocket".to_string(), Level::TRACE),
+            // ("libp2p_websocket_websys".to_string(), Level::TRACE),
         ]);
     }
     Ok(targets.into_iter().collect())

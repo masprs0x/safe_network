@@ -12,10 +12,10 @@ use libp2p::{
     PeerId,
 };
 use sn_protocol::{storage::RecordType, NetworkAddress, PrettyPrintRecordKey};
-use std::{
-    collections::HashMap,
-    time::{Duration, Instant},
-};
+use std::collections::HashMap;
+
+use instant::Instant;
+use tokio::time::Duration;
 
 // Max parallel fetches that can be undertaken at the same time.
 const MAX_PARALLEL_FETCH: usize = K_VALUE.get();
@@ -235,7 +235,7 @@ mod tests {
         );
         assert!(keys_to_fetch.is_empty());
 
-        tokio::time::sleep(FETCH_TIMEOUT + Duration::from_secs(1)).await;
+        sleep(FETCH_TIMEOUT + Duration::from_secs(1)).await;
 
         // all the previous fetches should have failed and fetching next batch
         let keys_to_fetch = replication_fetcher.next_keys_to_fetch();

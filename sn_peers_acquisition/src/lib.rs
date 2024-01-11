@@ -129,20 +129,21 @@ pub fn parse_peer_addr(addr: &str) -> Result<Multiaddr> {
         // Turn the address into a `/ip4/<ip>/tcp/<port>` multiaddr.
         let multiaddr = multiaddr.with(Protocol::Tcp(addr.port()));
         #[cfg(feature = "quic")]
-        // Turn the address into a `/ip4/<ip>/udp/<port>/quic-v1` multiaddr.
+        // // Turn the address into a `/ip4/<ip>/udp/<port>/quic-v1` multiaddr.
+        // let multiaddr = multiaddr
+        //     .with(Protocol::Udp(addr.port()))
+        //     .with(Protocol::QuicV1);
+        // #[cfg(target_arch = "wasm32")]
+        // Turn the address into a `/ip4/<ip>/udp/<port>/websocket-websys-v1` multiaddr.
         let multiaddr = multiaddr
-            .with(Protocol::Udp(addr.port()))
-            .with(Protocol::QuicV1);
-        #[cfg(target_arch = "wasm32")]
-        // Turn the address into a `/ip4/<ip>/udp/<port>/webtransport-websys-v1` multiaddr.
-        let multiaddr = multiaddr
-            .with(Protocol::Udp(addr.port()))
-            .with(Protocol::WebTransport);
+            .with(Protocol::Tcp(addr.port()))
+            .with(Protocol::Ws("/".into()));
         return Ok(multiaddr);
     }
 
     // Parse any valid multiaddr string
     if let Ok(addr) = addr.parse::<Multiaddr>() {
+        debug!("Parsing a full multiaddr: {:?}", addr);
         return Ok(addr);
     }
 

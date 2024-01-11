@@ -31,6 +31,8 @@ use std::{
 use tokio::sync::oneshot;
 use xor_name::XorName;
 
+use instant::Instant;
+
 /// Commands to send to the Swarm
 #[allow(clippy::large_enum_variant)]
 pub enum SwarmCmd {
@@ -296,7 +298,7 @@ pub struct SwarmLocalState {
 
 impl SwarmDriver {
     pub(crate) fn handle_cmd(&mut self, cmd: SwarmCmd) -> Result<(), Error> {
-        let start = std::time::Instant::now();
+        let start = Instant::now();
         let mut cmd_string = "";
         match cmd {
             SwarmCmd::TriggerIntervalReplication => {
@@ -511,15 +513,19 @@ impl SwarmDriver {
             }
             SwarmCmd::Dial { addr, sender } => {
                 cmd_string = "Dial";
+
+                info!("aaaaaaaaa dial");
                 let mut addr_copy = addr.clone();
                 if let Some(peer_id) = multiaddr_pop_p2p(&mut addr_copy) {
                     // Only consider the dial peer is bootstrap node when proper PeerId is provided.
+                    info!("bbbbbbbbbbbbbb dial");
                     if let Some(kbucket) = self.swarm.behaviour_mut().kademlia.kbucket(peer_id) {
                         let ilog2 = kbucket.range().0.ilog2();
                         let peers = self.bootstrap_peers.entry(ilog2).or_default();
                         peers.insert(peer_id);
                     }
                 }
+                info!("cccccccccccccccccc dial");
                 let _ = match self.dial(addr) {
                     Ok(_) => sender.send(Ok(())),
                     Err(e) => sender.send(Err(e.into())),

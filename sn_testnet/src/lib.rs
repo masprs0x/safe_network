@@ -246,8 +246,10 @@ impl Testnet {
         #[cfg(not(feature = "quic"))]
         let genesis_multi_addr = format!("/ip4/127.0.0.1/tcp/{genesis_port:?}/p2p/{peer_id}");
         #[cfg(feature = "quic")]
-        let genesis_multi_addr =
-            format!("/ip4/127.0.0.1/udp/{genesis_port:?}/quic-v1/p2p/{peer_id}");
+        // TODO: properly set this for quic
+        let genesis_multi_addr = format!("/ip4/127.0.0.1/tcp/{genesis_port:?}/ws/p2p/{peer_id}");
+        // let genesis_multi_addr =
+        //     format!("/ip4/127.0.0.1/udp/{genesis_port:?}/quic-v1/p2p/{peer_id}");
         Ok(genesis_multi_addr)
     }
 

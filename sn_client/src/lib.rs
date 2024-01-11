@@ -35,6 +35,95 @@ pub(crate) use error::Result;
 
 use sn_networking::Network;
 
+#[cfg(target_arch = "wasm32")]
+use console_error_panic_hook;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
+use web_sys::console;
+
+// This is like the `main` function, except for JavaScript.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(start)]
+pub async fn main_js() -> std::result::Result<(), JsValue> {
+    // This provides better error messages in debug mode.
+    // It's disabled in release mode so it doesn't bloat up the file size.
+    // #[cfg(debug_assertions)]
+    console_error_panic_hook::set_once();
+
+    // Your code goes here!
+    console::log_1(&JsValue::from_str("Hello safe world!"));
+
+    // Tracing
+    tracing_wasm::set_as_global_default();
+
+    // if let Err(error) = Client::quick_start(None).await {
+    //     console::log_1(&JsValue::from_str("quick_start err!.{error:?}"));
+    // }
+
+    // console::log_1(&JsValue::from_str("Supposedly a client started!"));
+
+    Ok(())
+}
+
+/// A quick client that only takes some peers to connect to
+#[wasm_bindgen]
+#[cfg(target_arch = "wasm32")]
+pub async fn greet(s: &str) -> std::result::Result<(), JsValue> {
+    console::log_1(&JsValue::from_str(s));
+    Ok(())
+}
+
+/// A quick client that only takes some peers to connect to
+#[wasm_bindgen]
+#[cfg(target_arch = "wasm32")]
+pub async fn get_data(peer: &str) -> std::result::Result<(), JsError> {
+    // pub async fn get_data(peer: &str, data_address: &[u8]) -> std::result::Result<(), JsError> {
+
+    let data_address = "9d7e115061066126482a229822e6d68737bd67d826c269762c0f64ce87af6b4c";
+    let bytes = hex::decode(&data_address).expect("Input address is not a hex string");
+    let xor_name = xor_name::XorName(
+        bytes
+            .try_into()
+            .expect("Failed to parse XorName from hex string"),
+    );
+
+    use sn_protocol::storage::ChunkAddress;
+    console::log_1(&JsValue::from_str(peer));
+
+    let the_peer = sn_peers_acquisition::parse_peer_addr(peer)?;
+
+    console::log_1(&JsValue::from_str(&format!(
+        "Provided Peer was {the_peer:?}"
+    )));
+
+    // // Start a single threaded runtime to run the client
+    // let rt = tokio::runtime::Builder::new_current_thread()
+    //     // .enable_all()
+    //     .build()
+    //     .map_err(|e| JsError::new(&format!("Client could not start: {e:?}")))?;
+
+    // let outcome = rt.block_on(async {
+    let client = Client::quick_start(Some(vec![the_peer]))
+        .await
+        .map_err(|e| JsError::new(&format!("Client could not start: {e:?}")))?;
+
+    console::log_1(&JsValue::from_str("Client started {chunk:?}"));
+
+    let chunk = client
+        .get_chunk(ChunkAddress::new(xor_name), false)
+        .await
+        .map_err(|e| JsError::new(&format!("Client get data failed: {e:?}")))?;
+
+    console::log_1(&JsValue::from_str(&format!("Data found {chunk:?}")));
+
+    //specify return type
+    // Ok::<_, JsError>(())
+    // });
+
+    Ok(())
+}
+
 /// Client API implementation to store and get data.
 #[derive(Clone)]
 pub struct Client {
