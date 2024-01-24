@@ -4517,30 +4517,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "self_encryption"
-version = "0.29.0"
-source = "git+https://github.com/maidsafe/self_encryption?branch=SlimDownTokioRequirements#c77ff446cf800aa21607abc421c51ba51f31a345"
-dependencies = [
- "aes",
- "bincode",
- "brotli",
- "bytes",
- "cbc",
- "err-derive",
- "hex",
- "itertools 0.10.5",
- "num_cpus",
- "rand",
- "rand_chacha",
- "rayon",
- "serde",
- "tempfile",
- "tiny-keccak",
- "tokio",
- "xor_name",
-]
-
-[[package]]
 name = "semver"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4764,7 +4740,7 @@ dependencies = [
  "rand",
  "rayon",
  "rmp-serde",
- "self_encryption 0.29.0 (git+https://github.com/maidsafe/self_encryption?branch=SlimDownTokioRequirements)",
+ "self_encryption",
  "serde",
  "sn_networking",
  "sn_peers_acquisition",
@@ -4891,7 +4867,7 @@ dependencies = [
  "rayon",
  "reqwest",
  "rmp-serde",
- "self_encryption 0.29.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "self_encryption",
  "serde",
  "sn_build_info",
  "sn_client",
